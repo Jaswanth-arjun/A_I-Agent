@@ -1,4 +1,6 @@
 <?php 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 session_start();
 require "connection.php";
 $email = "";
@@ -6,11 +8,12 @@ $name = "";
 $errors = array();
 
 // Brevo API Configuration
-$brevo_api_key = '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'; // Replace with your actual Brevo API key
-$brevo_sender_email = 'nellurujaswanth2004@gmail.com'; // Replace with your verified sender email in Brevo
+// Brevo API Configuration - UPDATED
+$brevo_api_key = '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'; 
+$brevo_sender_email = 'nellurujaswanth2004@gmail.com';
 $brevo_sender_name = 'AI Agent System';
 
-// Function to send email using Brevo API
+// Updated sendEmailBrevo function with better error handling
 function sendEmailBrevo($to, $subject, $htmlContent, $api_key, $sender_email, $sender_name) {
     $data = array(
         "sender" => array(
@@ -37,10 +40,15 @@ function sendEmailBrevo($to, $subject, $htmlContent, $api_key, $sender_email, $s
         'api-key: ' . $api_key,
         'content-type: application/json'
     ));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     
     $result = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
     curl_close($ch);
+    
+    // Debug logging (you can remove this after testing)
+    error_log("Brevo API Response - Code: $http_code, Error: $curl_error, Result: $result");
     
     return $http_code === 201;
 }
@@ -89,19 +97,23 @@ function getOTPEmailTemplate($otp_code, $type = 'verification') {
 }
 
 //if user signup button
+//if user signup button
 if(isset($_POST['signup'])){
     $name = mysqli_real_escape_string($con, $_POST['name']);
     $email = mysqli_real_escape_string($con, $_POST['email']);
     $password = mysqli_real_escape_string($con, $_POST['password']);
     $cpassword = mysqli_real_escape_string($con, $_POST['cpassword']);
+    
     if($password !== $cpassword){
         $errors['password'] = "Confirm password not matched!";
     }
+    
     $email_check = "SELECT * FROM usertable WHERE email = '$email'";
     $res = mysqli_query($con, $email_check);
     if(mysqli_num_rows($res) > 0){
         $errors['email'] = "Email that you have entered is already exist!";
     }
+    
     if(count($errors) === 0){
         $encpass = password_hash($password, PASSWORD_BCRYPT);
         $code = rand(999999, 111111);
@@ -109,6 +121,7 @@ if(isset($_POST['signup'])){
         $insert_data = "INSERT INTO usertable (name, email, password, code, status)
                         values('$name', '$email', '$encpass', '$code', '$status')";
         $data_check = mysqli_query($con, $insert_data);
+        
         if($data_check){
             $subject = "AI Agent System - Email Verification Code";
             $message = getOTPEmailTemplate($code, 'verification');
@@ -121,11 +134,13 @@ if(isset($_POST['signup'])){
                 $_SESSION['password'] = $password;
                 header('location: user-otp.php');
                 exit();
-            }else{
+            } else {
+                // Delete the user record if email sending fails
+                mysqli_query($con, "DELETE FROM usertable WHERE email = '$email'");
                 $errors['otp-error'] = "Failed while sending code via Brevo! Please try again.";
             }
-        }else{
-            $errors['db-error'] = "Failed while inserting data into database!";
+        } else {
+            $errors['db-error'] = "Failed while inserting data into database: " . mysqli_error($con);
         }
     }
 }
