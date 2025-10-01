@@ -258,7 +258,7 @@ $is_logged_in = isset($_SESSION['user_id']) ? 'true' : 'false';
             </div>
           </div>
           <a href="/login-user.php" class="btn btn-outline-light me-2 login-btn">Login</a>
-          <a href="/A_I-AGENT/signup-user.php" class="btn btn-light signup-btn">Sign Up</a>
+          <a href="/signup-user.php" class="btn btn-light signup-btn">Sign Up</a>
         </div>
       </div>
     </div>
@@ -941,4 +941,5 @@ $is_logged_in = isset($_SESSION['user_id']) ? 'true' : 'false';
 </body>
 
 </html>
+
 
