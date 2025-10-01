@@ -6,12 +6,38 @@ require "connection.php";
 $email = "";
 $name = "";
 $errors = array();
+function getEnvVariableDirect($key, $default = null) {
+    $envFile = __DIR__ . '/.env';
+    if (!file_exists($envFile)) {
+        error_log("❌ .env file not found at: $envFile");
+        return $default;
+    }
+    
+    $content = file_get_contents($envFile);
+    preg_match('/' . $key . '=(.*)/', $content, $matches);
+    
+    if (isset($matches[1])) {
+        $value = trim($matches[1]);
+        // Remove quotes if present
+        $value = trim($value, '"\'');
+        error_log("✅ Found $key: " . substr($value, 0, 10) . "...");
+        return $value;
+    }
+    
+    error_log("❌ $key not found in .env file");
+    return $default;
+}
+$brevo_api_key = getEnvVariableDirect('BREVO_API_KEY');
+$brevo_sender_email = getEnvVariableDirect('BREVO_SENDER_EMAIL', 'nellurujaswanth2004@gmail.com');
+$brevo_sender_name = getEnvVariableDirect('BREVO_SENDER_NAME', 'AI Agent System');
 
-// Brevo API Configuration
-// Brevo API Configuration - UPDATED
-$brevo_api_key = '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'; 
-$brevo_sender_email = 'nellurujaswanth2004@gmail.com';
-$brevo_sender_name = 'AI Agent System';
+// Debug output (remove this after testing)
+error_log("=== BREVO CONFIG DEBUG ===");
+error_log("API Key: " . ($brevo_api_key ? substr($brevo_api_key, 0, 10) . "..." : "NOT FOUND"));
+error_log("Sender Email: $brevo_sender_email");
+error_log("Sender Name: $brevo_sender_name");
+error_log("===========================");
+
 
 // Updated sendEmailBrevo function with better error handling
 function sendEmailBrevo($to, $subject, $htmlContent, $api_key, $sender_email, $sender_name) {
