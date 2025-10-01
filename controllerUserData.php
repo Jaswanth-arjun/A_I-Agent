@@ -11,6 +11,7 @@ $brevo_sender_email = 'nellurujaswanth2004@gmail.com'; // Replace with your veri
 $brevo_sender_name = 'AI Agent System';
 if (!$brevo_api_key) {
     error_log("Brevo API Key not found in environment variables");
+}
 // Function to send email using Brevo API
 function sendEmailBrevo($to, $subject, $htmlContent, $api_key, $sender_email, $sender_name) {
     $data = array(
