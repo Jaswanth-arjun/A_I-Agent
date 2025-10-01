@@ -1,9 +1,7 @@
 import os
 import re
-import smtplib
 import sqlite3
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from twilio.rest import Client
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, send_file, render_template
 from apscheduler.schedulers.background import BackgroundScheduler
 from together import Together
@@ -15,14 +13,16 @@ from datetime import datetime, timedelta
 import mysql.connector
 
 # === CONFIGURATION ===
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 465
-EMAIL_ADDRESS = "nellurujaswanth2004@gmail.com"
-EMAIL_PASSWORD = "fmbemfjkavtkvugs"
+TWILIO_ACCOUNT_SID = "AC528ab24ab623cb4e38bcc3d1bddef076"
+TWILIO_AUTH_TOKEN = "76a526d490d111cf6aaff35d22690d27"
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"  # Twilio WhatsApp sandbox
 TOGETHER_API_KEY = "78099f081adbc36ae685a12a798f72ee5bc90e17436b71aba902cc1f854495ff"
 
 # === Setup Together client ===
 together = Together(api_key=TOGETHER_API_KEY)
+
+# === Setup Twilio client ===
+twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 # === Flask & Scheduler Setup ===
 app = Flask(__name__)
@@ -31,18 +31,18 @@ csrf = CSRFProtect(app)
 scheduler = BackgroundScheduler()
 
 # === GLOBAL PROGRESS STORE (for demo/testing; use a DB for production) ===
-progress_store = {}  # key: (email, course), value: int (completed days)
+progress_store = {}  # key: (phone, course), value: int (completed days)
 
-def increment_progress(email, course):
-    key = (email, course)
+def increment_progress(phone, course):
+    key = (phone, course)
     progress_store[key] = progress_store.get(key, 0) + 1
 
-def get_progress(email, course):
-    key = (email, course)
+def get_progress(phone, course):
+    key = (phone, course)
     return progress_store.get(key, 0)
 
-def reset_progress(email, course):
-    progress_store[(email, course)] = 0
+def reset_progress(phone, course):
+    progress_store[(phone, course)] = 0
 
 # === Combined HTML Template ===
 FULL_TEMPLATE = '''
@@ -409,7 +409,7 @@ FULL_TEMPLATE = '''
                                 <div class="absolute -bottom-5 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-primary-100"></div>
                             </div>
                             <h3 class="text-lg font-semibold text-gray-800 mb-3">Start Learning</h3>
-                            <p class="text-gray-600">Receive daily bite-sized lessons and track your progress</p>
+                            <p class="text-gray-600">Receive daily bite-sized lessons via WhatsApp and track your progress</p>
                         </div>
                     </div>
                 </div>
@@ -451,16 +451,15 @@ FULL_TEMPLATE = '''
                         <input type="hidden" name="course" value="{{ course }}">
                         
                         <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                            <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                                    </svg>
+                                    <i class="fab fa-whatsapp text-gray-400"></i>
                                 </div>
-                                <input type="email" name="email" id="email" class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg input-focus focus:outline-none focus:ring-primary-500 focus:border-primary-500" placeholder="you@example.com" required>
+                                <input type="tel" name="phone" id="phone" class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg input-focus focus:outline-none focus:ring-primary-500 focus:border-primary-500" placeholder="+1234567890" required>
                             </div>
+                            <p class="mt-1 text-sm text-gray-500">Enter your WhatsApp number with country code (e.g., +1 for US)</p>
+                            <p class="mt-1 text-sm text-primary-600 font-medium">📱 First, join our WhatsApp sandbox by sending "join {{ sandbox_code }}" to {{ twilio_whatsapp_number }}</p>
                         </div>
                         
                         <div>
@@ -514,20 +513,20 @@ FULL_TEMPLATE = '''
         
         <script>
             function validateForm() {
-                const email = document.getElementById('email').value;
+                const phone = document.getElementById('phone').value;
                 const days = document.getElementById('days').value;
                 const time = document.getElementById('time').value;
                 
                 // Basic validation
-                if (!email || !days || !time) {
+                if (!phone || !days || !time) {
                     alert('Please fill in all required fields');
                     return false;
                 }
                 
-                // Email validation
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(email)) {
-                    alert('Please enter a valid email address');
+                // Phone validation - basic check for country code
+                const phoneRegex = /^\+[1-9]\d{1,14}$/;
+                if (!phoneRegex.test(phone)) {
+                    alert('Please enter a valid WhatsApp number with country code (e.g., +1234567890)');
                     return false;
                 }
                 
@@ -627,13 +626,13 @@ FULL_TEMPLATE = '''
                                 <svg class="flex-shrink-0 w-5 h-5 text-primary-600 mt-0.5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
-                                <span class="text-gray-700">Check your inbox for the first lesson - it should arrive within 24 hours</span>
+                                <span class="text-gray-700">Check your WhatsApp for the first lesson - it should arrive within 24 hours</span>
                             </li>
                             <li class="flex items-start">
                                 <svg class="flex-shrink-0 w-5 h-5 text-primary-600 mt-0.5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
-                                <span class="text-gray-700">Add <span class="font-mono text-primary-600">learning@learnhub.com</span> to your contacts to ensure delivery</span>
+                                <span class="text-gray-700">Save <span class="font-mono text-primary-600">{{ twilio_whatsapp_number }}</span> to your contacts</span>
                             </li>
                             <li class="flex items-start">
                                 <svg class="flex-shrink-0 w-5 h-5 text-primary-600 mt-0.5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -729,7 +728,7 @@ FULL_TEMPLATE = '''
 </html>
 '''
 
-def generate_daily_content(course, part, days):  # Add days parameter
+def generate_daily_content(course, part, days):
     if days == 1:
         prompt = f"""
 You are an expert course creator. The topic is: '{course}'. The learner wants to complete this course in **1 day**, so provide the **entire course content in a single comprehensive lesson**.
@@ -779,72 +778,47 @@ Include in Lesson {part}:
     )
     return response.choices[0].message.content.strip()
 
-def send_email(to_email, subject, body):
+def send_whatsapp(to_phone, message):
     try:
-        if not to_email or "@" not in to_email:
-            print(f"❌ Invalid email address: {to_email}")
+        if not to_phone or not to_phone.startswith('+'):
+            print(f"❌ Invalid phone number: {to_phone}")
             return False
-        msg = MIMEMultipart()
-        msg["From"] = f"LearnHub <{EMAIL_ADDRESS}>"
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: 'Poppins', sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #4361ee, #3a0ca3); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
-                .content {{ padding: 20px; background: #f9f9f9; border-radius: 0 0 8px 8px; }}
-                .button {{ display: inline-block; padding: 10px 20px; background: #4361ee; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
-                .footer {{ margin-top: 20px; text-align: center; font-size: 12px; color: #777; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>LearnHub Daily Lesson</h1>
-                    <p>Your personalized learning journey</p>
-                </div>
-                <div class="content">
-                    {body.replace('\n', '<br>')}
-                    <div class="footer">
-                        <p>You received this email because you signed up for a course on LearnHub.</p>
-                        <p><a href="#" style="color: #4361ee;">Unsubscribe</a> | <a href="#" style="color: #4361ee;">Preferences</a></p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        msg.attach(MIMEText(html, "html"))
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_ADDRESS, to_email, msg.as_string())
-        print(f"📤 Successfully sent: {subject} to {to_email}")
+        
+        # Format phone number for WhatsApp
+        whatsapp_to = f"whatsapp:{to_phone}"
+        
+        # Truncate message if needed (WhatsApp has higher limits than SMS)
+        if len(message) > 4000:
+            message = message[:3997] + "..."
+        
+        twilio_client.messages.create(
+            body=message,
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=whatsapp_to
+        )
+        print(f"📤 Successfully sent WhatsApp to: {to_phone}")
         return True
     except Exception as e:
-        print(f"❌ Error sending email: {str(e)}")
+        print(f"❌ Error sending WhatsApp: {str(e)}")
         return False
 
-def scheduled_job(email, course, part, days):  # Add days parameter
+def scheduled_job(phone, course, part, days):
     try:
-        content = generate_daily_content(course, part, days)  # Pass days to generate_daily_content
-        if send_email(email, f"{course} - Day {part}", content):
-            increment_progress(email, course)
+        content = generate_daily_content(course, part, days)
+        if send_whatsapp(phone, f"{course} - Day {part}\n\n{content}"):
+            increment_progress(phone, course)
     except Exception as e:
-        print(f"Failed to send day {part} email: {str(e)}")
+        print(f"Failed to send day {part} WhatsApp: {str(e)}")
 
-def remove_existing_jobs(email, course):
+def remove_existing_jobs(phone, course):
     for job in scheduler.get_jobs():
-        if job.id.startswith(f"{email}_{course}_"):
+        if job.id.startswith(f"{phone}_{course}_"):
             try:
                 scheduler.remove_job(job.id)
             except:
                 pass
 
-def schedule_course(email, course, days, time_str):
+def schedule_course(phone, course, days, time_str):
     try:
         now = datetime.now()
         # Convert AM/PM time to 24-hour format for scheduling
@@ -852,33 +826,34 @@ def schedule_course(email, course, days, time_str):
         hour = time_obj.hour
         minute = time_obj.minute
         
-        remove_existing_jobs(email, course)
+        remove_existing_jobs(phone, course)
         
-        welcome_content = (
-            f"Welcome to <b>{course}</b>!<br><br>"
-            "You will receive daily lessons in your inbox. Let's start learning!"
+        welcome_message = (
+            f"Welcome to {course}! 🎓\n\n"
+            "You will receive daily lessons via WhatsApp. Let's start learning!\n\n"
+            "To stop receiving messages, reply 'STOP' at any time."
         )
         
-        if not send_email(email, f"Welcome to {course}!", welcome_content):
-            raise Exception("Failed to send welcome email")
+        if not send_whatsapp(phone, welcome_message):
+            raise Exception("Failed to send welcome WhatsApp")
             
         for i in range(1, days + 1):
             scheduled_time = now + timedelta(days=i-1)
             scheduled_time = scheduled_time.replace(hour=hour, minute=minute, second=0)
             
-            job_id = f"{email}_{course}_day{i}"
+            job_id = f"{phone}_{course}_day{i}"
             scheduler.add_job(
                 scheduled_job,
                 'date',
                 run_date=scheduled_time,
-                args=[email, course, i, days],  # Add days to args
+                args=[phone, course, i, days],
                 id=job_id,
                 replace_existing=True
             )
-            print(f"📅 Scheduled Day {i} email at {scheduled_time}")
+            print(f"📅 Scheduled Day {i} WhatsApp at {scheduled_time}")
             
-        reset_progress(email, course)
-        session['email'] = email
+        reset_progress(phone, course)
+        session['phone'] = phone
         session['course'] = course
         session['total_days'] = int(days)
         return True
@@ -903,19 +878,17 @@ def schedule_form():
         return redirect(url_for("select_course"))
     if request.method == "POST":
         try:
-            email = request.form.get("email", "").strip()
+            phone = request.form.get("phone", "").strip()
             days = request.form.get("days", "").strip()
             time = request.form.get("time", "").strip()
-            if not all([email, days, time]):
+            if not all([phone, days, time]):
                 raise ValueError("All fields are required")
-            if not "@" in email or not "." in email:
-                raise ValueError("Please enter a valid email address")
+            if not phone.startswith('+'):
+                raise ValueError("Please enter a valid WhatsApp number with country code (e.g., +1 for US)")
             if not days.isdigit() or int(days) <= 0:
                 raise ValueError("Please enter a valid number of days")
-            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-                raise ValueError("Please enter a valid email address")
-            schedule_course(email, course, int(days), time)
-            session['email'] = email
+            schedule_course(phone, course, int(days), time)
+            session['phone'] = phone
             session['course'] = course
             session['total_days'] = int(days)
             return redirect(url_for('progress'))
@@ -926,6 +899,8 @@ def schedule_form():
                 template='user_form',
                 course=course,
                 error=error_message,
+                sandbox_code="sea-sun",  # Replace with your actual sandbox code
+                twilio_whatsapp_number="+14155238886",
                 csrf_token=generate_csrf()
             )
         except Exception as e:
@@ -935,29 +910,34 @@ def schedule_form():
                 template='user_form',
                 course=course,
                 error=error_message,
+                sandbox_code="sea-sun",  # Replace with your actual sandbox code
+                twilio_whatsapp_number="+14155238886",
                 csrf_token=generate_csrf()
             )
     return render_template_string(
         FULL_TEMPLATE,
         template='user_form',
         course=course,
+        sandbox_code="sea-sun",  # Replace with your actual sandbox code
+        twilio_whatsapp_number="+14155238886",
         csrf_token=generate_csrf()
     )
 
 @app.route("/progress")
 def progress():
-    email = session.get('email')
+    phone = session.get('phone')
     course = session.get('course')
     total_days = session.get('total_days', 0)
-    if not email or not course or not total_days:
+    if not phone or not course or not total_days:
         return redirect(url_for('select_course'))
-    completed_days = get_progress(email, course)
+    completed_days = get_progress(phone, course)
     return render_template_string(
         FULL_TEMPLATE,
         template='confirm',
         course=course,
         total_days=total_days,
         completed_days=completed_days,
+        twilio_whatsapp_number="+14155238886",
         csrf_token=generate_csrf()
     )
 
@@ -972,53 +952,50 @@ def course_agent():
 @app.route("/signup", methods=["POST"])
 def signup():
     fullname = request.form["fullname"].strip()
-    email = request.form["email"].strip()
+    phone = request.form["phone"].strip()
     password = request.form["password"]
 
-    # Hash password here if needed
     try:
         conn = sqlite3.connect("userform.db")
         cur = conn.cursor()
-        cur.execute("INSERT INTO users (fullname, email, password) VALUES (?, ?, ?)", 
-                    (fullname, email, password))
+        cur.execute("INSERT INTO users (fullname, phone, password) VALUES (?, ?, ?)", 
+                    (fullname, phone, password))
         conn.commit()
         conn.close()
 
-        session["email"] = email  # Save email in session
+        session["phone"] = phone
         return redirect(url_for("schedule_form"))
     except Exception as e:
         return f"Signup failed: {str(e)}"
 
 @app.route("/certificate")
 def certificate():
-    if "email" not in session:
+    if "phone" not in session:
         return redirect(url_for("schedule_form"))
 
-    email = session["email"]
+    phone = session["phone"]
     course = session.get("course", "Your Course")
     date = datetime.now().strftime("%B %d, %Y")
 
     try:
-        # Connect to the same MySQL DB used by your PHP code
         conn = mysql.connector.connect(
-            host="localhost",
-            user="root",         # Use your MySQL username (default for XAMPP is 'root')
-            password="",         # Use your MySQL password (blank if using default XAMPP)
-            database="userform"  # Your database name
+            host="sql104.infinityfree.com",
+            user="if0_40043007",
+            password="FQM4N2z8L7ai9",
+            database="if0_40043007_db"
         )
 
         cur = conn.cursor()
-        # Look up the user name using the email from session
-        cur.execute("SELECT name FROM usertable WHERE email = %s", (email,))
+        cur.execute("SELECT name FROM usertable WHERE phone = %s", (phone,))
         result = cur.fetchone()
-        name = result[0] if result else email.split("@")[0]
+        name = result[0] if result else phone
 
         cur.close()
         conn.close()
 
     except Exception as e:
         print("❌ Error fetching name from MySQL:", e)
-        name = email.split("@")[0]  # fallback to email prefix
+        name = phone
 
     return render_template("cert.html", name=name, course=course, date=date)
 
