@@ -9,7 +9,7 @@ $errors = array();
 
 // Brevo API Configuration
 // Brevo API Configuration - UPDATED
-$brevo_api_key = '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'; 
+$brevo_api_key = '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'; 
 $brevo_sender_email = 'nellurujaswanth2004@gmail.com';
 $brevo_sender_name = 'AI Agent System';
 
