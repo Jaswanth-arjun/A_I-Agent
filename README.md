@@ -1,61 +1,221 @@
-# Login Signup Form with Email Verification
-Login Signup Form with Email Verification is a Working PHP based Sine Up from with Working OTP genataring System, It's Working On Local Host.
+# Smart AI Agents - Full Stack Website
+A comprehensive authentication system with email verification, password reset, and multi-platform deployment support.
 
-## How to configure XAMPP to send Mail from Localhost in PHP ?
+## 🌟 Features
+- User Registration with email verification via Brevo  
+- Secure Login/Logout functionality  
+- Password Reset with OTP verification  
+- Email Integration using Brevo API  
+- Multi-platform Deployment support  
+- WhatsApp Integration via Twilio (limited free tier)  
+- Course Integration via Together API  
+- Responsive Design  
 
-As a part of the experiment, developers need to send emails and we all know that sending mail from localhost using PHP can be much more painful if we don’t know how to properly configure XAMPP for it.
-To send mail from localhost using XAMPP, we’ve to configure XAMPP after installing it. To configure the XAMPP server to send mail from the localhost, we have to make some changes in two files one is PHP and another one is Sendmail.
+## 📁 Project Structure
 
-First, go to the XAMPP installation directory and open the XAMPP folder and follow the below steps same: I’ve installed XAMPP in the C directory.
-
-1. Go to the (C:xampp\php) and open the PHP configuration setting file then find the [mail function] by scrolling down or simply press ctrl+f to search it directly then find the following lines and pass these values. Remember, there may be a semicolon ; at the starting of each line, simply remove the semicolon from each line which is given below.
-
-```php
-[mail function]
-For Win32 only.
-http://php.net/smtp
-SMTP=smtp.gmail.com
-http://php.net/smtp-port
-smtp_port=587
-sendmail_from = your_email_address_here
-sendmail_path = "\"C:\xampp\sendmail\sendmail.exe\" -t"
+### PHP Authentication System
 ```
-That’s all for this file, press ctrl+s to save this file and then close it.
-
-
-2. Now, go the (C:\xampp\sendmail) and open the sendmail configuration setting file then find sendmail by scrolling down or press ctrl+f to search it directly then find the following lines and pass these values. Remember, there may be a semicolon ; at the starting of each line, simply remove the semicolon from each line which is given below.
-
-```php
-smtp_server=smtp.gmail.com
-smtp_port=587
-error_logfile=error.log
-debug_logfile=debug.log
-auth_username=your_email_address_here
-auth_password=your_password_here
-force_sender=your_email_address_here (it's optional)
+Project/
+│── connection.php          # Database connection configuration
+│── controllerUserData.php  # Main controller for user operations
+│── forgot-password.php     # Password reset request handler
+│── home.php                # Main dashboard page
+│── LICENSE                 # Project license
+│── login-user.php          # User login handler
+│── logout-user.php         # User logout handler
+│── new-password.php        # New password setup
+│── password-changed.php    # Password change confirmation
+│── README.md               # Project documentation
+│── reset-code.php          # Password reset code verification
+│── signup-user.php         # User registration handler
+│── style.css               # Styling for all pages
+│── userform.sql            # Database schema for user table
+│── user-otp.php            # OTP verification handler
+│── sendmail.php            # Email sending functionality
+│── config.php              # Centralized configuration (recommended)
+│── .env                    # Environment variables (not in repo)
 ```
 
-that’s all for this file, press ctrl+s to save this file and then close it. After all changes in the two files, don’t forget to restart your apache server.
-Now, you’re done with the required changes in these files. To check the changes you’ve made are correct or not. First, create a PHP file with the .php extension and paste the following codes into your PHP file. After pasting the codes, put your details to the given variables – In the $receiver variable put the receiver email address, in the $subject variable put the email subject and do respectively.
+### Python Deployment Structure
+```
+ai-agent/
+│── Procfile              # Process file for deployment
+│── README.md             # Documentation
+│── render.yaml           # Render deployment configuration
+│── requirements.txt      # Python dependencies
+│── runtime.txt           # Python runtime version
+│── test.py               # Test script
+│
+├── static/
+│   └── images/           # Static assets
+│
+└── templates/            # HTML templates
+```
 
+## 🚀 Quick Start
+
+### Prerequisites
+- PHP 7.4+ and MySQL for authentication system  
+- Python 3.8+ for AI agent  
+- Brevo account for email services  
+- Twilio account for WhatsApp integration  
+- Together API account for course features  
+
+### Installation
+**Clone the repository**
+```bash
+git clone <repository-url>
+cd Project
+```
+
+**Database Setup**
+- Import `userform.sql` into your MySQL database via phpMyAdmin  
+- Update database credentials in `connection.php`  
+
+**Environment Configuration**
+Create a `.env` file (never commit this to version control):  
+```
+BREVO_API_KEY=your_brevo_api_key_here
+DATABASE_HOST=your_database_host
+DATABASE_USER=your_database_username
+DATABASE_PASS=your_database_password
+DATABASE_NAME=your_database_name
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TOGETHER_API_KEY=your_together_api_key_here
+```
+
+### Brevo Configuration
+- Sign up at [brevo.com](https://www.brevo.com/)  
+- Verify your email address  
+- Get your API key from Brevo API Settings  
+- Update `controllerUserData.php` with your Brevo API key and verified email  
+
+### Configuration Files
+**config.php (Recommended)**
 ```php
 <?php
-$receiver = "receiver email address here";
-$subject = "Email Test via PHP using Localhost";
-$body = "Hi, there...This is a test email send from Localhost.";
-$sender = "From:sender email address here";
+return [
+    'brevo' => [
+        'api_key' => getenv('BREVO_API_KEY') ?: 'your-api-key-here',
+        'sender_email' => 'nellurujaswanth2004@gmail.com',
+        'sender_name' => 'AI Agent System'
+    ],
+    'database' => [
+        'host' => getenv('DATABASE_HOST') ?: 'localhost',
+        'username' => getenv('DATABASE_USER') ?: 'username',
+        'password' => getenv('DATABASE_PASS') ?: 'password',
+        'name' => getenv('DATABASE_NAME') ?: 'database_name'
+    ],
+    'twilio' => [
+        'account_sid' => getenv('TWILIO_ACCOUNT_SID'),
+        'auth_token' => getenv('TWILIO_AUTH_TOKEN')
+    ]
+];
+?>
+```
 
-if(mail($receiver, $subject, $body, $sender)){
-    echo "Email sent successfully to $receiver";
-}else{
-    echo "Sorry, failed while sending mail!";
+**connection.php**
+```php
+<?php
+$config = require_once 'config.php';
+$db = $config['database'];
+
+$con = mysqli_connect($db['host'], $db['username'], $db['password'], $db['name']);
+if (!$con) {
+    die("Connection failed: " . mysqli_connect_error());
 }
 ?>
 ```
 
-After completing these steps, just open this PHP file on your browser. If your mail is sent successfully then there is appears a success message “Email sent successfully to …..” and in the case your mail not sent then there is appears “Sorry, failed while sending mail!”.
+## 🌐 Deployment
 
-If mail is sent then check the receiver has got your email or not. If yes, then great you did all changes perfectly. If no, check all the changes that you have done earlier are correct or not.
+### PHP Deployment on InfinityFree
+- Upload Files to InfinityFree hosting  
+- Configure Database in phpMyAdmin  
+- Set Environment Variables in hosting panel  
+- Update Support Email in `home.php` and `index.php`  
 
-**Note:** If your mail isn’t sent after the correct changes and you got a warning or error. Please configure your google account security as “Less secure apps”. To configure it: – Go to your Google account then click on the Security tab and scroll down, there you can see the Less secure app access panel, Simply turn on that. This panel only shows if you haven’t enabled 2-Step Verification.
+### Python Deployment on Sevella
+**Prepare Requirements**
+```
+# requirements.txt
+flask==2.3.3
+requests==2.31.0
+python-dotenv==1.0.0
+```
 
+**Configure Environment Variables in Sevella:**
+```
+BREVO_API_KEY=your_brevo_api_key_here
+TOGETHER_API_KEY=your_together_api_key_here
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+```
+
+- Deploy using the provided `render.yaml` and `Procfile`  
+
+**Live URLs**
+- PHP Authentication: [InfinityFree Deployment]  
+- Python AI Agent: https://ai-agent-31l3s.sevalla.app/  
+
+## 🔧 API Integration
+
+### Brevo Email Service
+- Used for email OTP verification  
+- API key management through Brevo dashboard  
+- Default sender configuration  
+
+### Twilio WhatsApp Integration
+- Free tier: 9 messages per day  
+- Account SID and Auth Token required  
+- Configure in environment variables  
+
+### Together API
+- Course integration features  
+- API key required for functionality  
+
+## 🔒 Security Notes
+⚠️ Critical Security Practices:
+- Never store API keys in version control  
+- Use environment variables for all sensitive data  
+- Regularly rotate API keys  
+- Validate and sanitize all user inputs  
+- Use prepared statements for database queries  
+
+## 📧 Support
+For customer support, update the email address in:  
+- `home.php` (line 503)  
+- `index.php`  
+
+## 🐛 Troubleshooting
+### Common Issues
+**Email not sending**
+- Verify Brevo API key  
+- Check sender email verification  
+- Review Brevo account limits  
+
+**Database connection errors**
+- Verify credentials in `connection.php`  
+- Check database host accessibility  
+- Ensure user has proper permissions  
+
+**Deployment issues**
+- Verify environment variables are set  
+- Check file permissions  
+- Review deployment platform requirements  
+
+## 📄 License
+This project is licensed under the terms specified in the LICENSE file.
+
+## 🤝 Contributing
+1. Fork the repository  
+2. Create a feature branch  
+3. Commit your changes  
+4. Push to the branch  
+5. Create a Pull Request  
+
+## 📞 Contact
+For questions or support, please contact the development team through the support email configured in the application.
+
+**Note:** Always keep your API keys and sensitive information secure. Use environment variables and never commit them to version control systems.
